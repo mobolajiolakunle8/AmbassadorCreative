@@ -6,7 +6,7 @@ import { compressImageToBase64, formatBytes } from '../firebase';
 import {
   Lock, LogOut, Plus, Edit3, Trash2, Save, X, Star, FileImage,
   BarChart3, FolderOpen, Search, Upload, ImagePlus, User, FolderKanban,
-  Settings as SettingsIcon, KeyRound, HardDrive,
+  Settings as SettingsIcon, KeyRound, HardDrive, MessageSquare, Mail,
 } from 'lucide-react';
 import { useState, useRef } from 'react';
 
@@ -657,14 +657,133 @@ function SettingsEditor() {
   );
 }
 
+// === Messages Viewer ===
+function MessagesViewer() {
+  const { messages, deleteMessage, markMessageRead } = useApp();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const unreadCount = messages.filter(m => !m.read).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-800">Inbox</h3>
+          <p className="text-sm text-gray-400">
+            {messages.length} message{messages.length !== 1 ? 's' : ''} · {unreadCount} unread
+          </p>
+        </div>
+      </div>
+
+      {messages.length === 0 ? (
+        <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+          <MessageSquare size={48} className="mx-auto text-gray-200 mb-3" />
+          <p className="text-gray-400 text-sm">No messages yet</p>
+          <p className="text-gray-300 text-xs mt-1">Messages from the contact form will appear here</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {messages.map(msg => {
+            const isExpanded = expandedId === msg.id;
+            return (
+              <div
+                key={msg.id}
+                className={`bg-white rounded-xl border transition-all ${
+                  msg.read ? 'border-gray-200' : 'border-blue-200 bg-blue-50/30'
+                }`}
+              >
+                {/* Message header */}
+                <button
+                  onClick={() => {
+                    setExpandedId(isExpanded ? null : msg.id);
+                    if (!msg.read) markMessageRead(msg.id);
+                  }}
+                  className="w-full flex items-center gap-3 p-4 text-left"
+                >
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold ${
+                    msg.read ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-600'
+                  }`}>
+                    {msg.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-sm truncate ${msg.read ? 'text-gray-700' : 'text-gray-900 font-semibold'}`}>
+                        {msg.name}
+                      </span>
+                      {!msg.read && (
+                        <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-400 truncate">{msg.subject}</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-xs text-gray-400 hidden sm:block">
+                      {new Date(msg.date).toLocaleDateString('en-US', {
+                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                      })}
+                    </span>
+                    <Mail size={14} className={msg.read ? 'text-gray-300' : 'text-blue-500'} />
+                  </div>
+                </button>
+
+                {/* Expanded content */}
+                {isExpanded && (
+                  <div className="px-4 pb-4 border-t border-gray-100 pt-3">
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      <div>
+                        <span className="text-xs text-gray-400">From</span>
+                        <p className="text-sm text-gray-700">{msg.name}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-gray-400">Email</span>
+                        <a href={`mailto:${msg.email}`} className="text-sm text-blue-600 hover:underline block truncate">
+                          {msg.email}
+                        </a>
+                      </div>
+                    </div>
+                    <div className="mb-3">
+                      <span className="text-xs text-gray-400">Subject</span>
+                      <p className="text-sm text-gray-700 font-medium">{msg.subject}</p>
+                    </div>
+                    <div className="mb-4">
+                      <span className="text-xs text-gray-400">Message</span>
+                      <p className="text-sm text-gray-600 leading-relaxed mt-1 whitespace-pre-wrap">{msg.message}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={`mailto:${msg.email}?subject=Re: ${encodeURIComponent(msg.subject)}`}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors"
+                      >
+                        <Mail size={12} /> Reply via Email
+                      </a>
+                      <button
+                        onClick={() => {
+                          if (window.confirm('Delete this message?')) deleteMessage(msg.id);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 border border-red-200 text-red-500 rounded-lg text-xs font-medium hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 size={12} /> Delete
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // === Main Admin Dashboard ===
 export default function AdminDashboard() {
   const {
-    isAuthenticated, login, logout, projects, about,
+    isAuthenticated, login, logout, projects, messages,
     addProject, updateProject, deleteProject, setCurrentPage,
   } = useApp();
 
-  const [tab, setTab] = useState<'projects' | 'about' | 'settings'>('projects');
+  const [tab, setTab] = useState<'projects' | 'about' | 'settings' | 'messages'>('projects');
   const [showForm, setShowForm] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | undefined>();
   const [searchTerm, setSearchTerm] = useState('');
@@ -680,48 +799,6 @@ export default function AdminDashboard() {
     ...cat,
     count: projects.filter(p => p.category === cat.id).length,
   }));
-
-  // Calculate actual storage usage in bytes from base64 images
-  const calculateStorageUsage = () => {
-    let totalBytes = 0;
-
-    // Add project images
-    projects.forEach(project => {
-      if (project.images && project.images.length > 0) {
-        project.images.forEach(imgBase64 => {
-          // Remove data URL header
-          const base64Data = imgBase64.split(',')[1] || imgBase64;
-          // Approximate byte size from base64 length
-          const bytes = Math.floor((base64Data.length * 3) / 4);
-          totalBytes += bytes;
-        });
-      }
-
-      // Add thumbnail if different from images
-      if (project.thumbnail && !project.images?.includes(project.thumbnail)) {
-        const base64Data = project.thumbnail.split(',')[1] || project.thumbnail;
-        const bytes = Math.floor((base64Data.length * 3) / 4);
-        totalBytes += bytes;
-      }
-    });
-
-    // Add website DP
-    if (about.websiteDp) {
-      const base64Data = about.websiteDp.split(',')[1] || about.websiteDp;
-      const bytes = Math.floor((base64Data.length * 3) / 4);
-      totalBytes += bytes;
-    }
-
-    return totalBytes;
-  };
-
-  const totalStorageBytes = calculateStorageUsage();
-  const totalStorageKB = Math.round(totalStorageBytes / 1024);
-  const totalStorageMB = (totalStorageKB / 1024).toFixed(2);
-  const totalCapacityGB = 15;
-  const totalCapacityBytes = totalCapacityGB * 1024 * 1024 * 1024;
-  const storagePercentage = Math.min(100, Math.round((totalStorageBytes / totalCapacityBytes) * 100));
-  const remainingGB = ((totalCapacityBytes - totalStorageBytes) / (1024 * 1024 * 1024)).toFixed(2);
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
@@ -760,37 +837,43 @@ export default function AdminDashboard() {
         </button>
 
         {/* Portfolio Storage Card */}
-        <div className="p-4 bg-white rounded-xl border border-gray-200 flex flex-col gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0">
-              <HardDrive size={24} className="text-green-500" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-gray-800">Portfolio Storage</p>
-              <p className="text-xs text-gray-400 mt-0.5">
-                {totalStorageMB} MB / {totalCapacityGB} GB
-              </p>
-            </div>
+        <div className="p-4 bg-white rounded-xl border border-gray-200 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0">
+            <HardDrive size={24} className="text-green-500" />
           </div>
-          <div className="space-y-1">
-            <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-800 mb-1">Portfolio Storage</p>
+            <div className="w-full bg-gray-100 rounded-full h-2 mb-1">
               <div
-                className={`h-3 rounded-full transition-all ${
-                  storagePercentage < 50 ? 'bg-green-500' :
-                  storagePercentage < 80 ? 'bg-yellow-500' :
-                  'bg-red-500'
-                }`}
-                style={{ width: `${storagePercentage}%` }}
+                className="bg-green-500 h-2 rounded-full transition-all"
+                style={{
+                  width: `${Math.min(
+                    100,
+                    Math.round(
+                      (projects.reduce((acc, p) => {
+                        const images = p.images || [];
+                        return acc + images.reduce((imgAcc, img) => {
+                          // Base64 images: ~3 bytes per 4 characters
+                          return imgAcc + (img.length * 3) / 4;
+                        }, 0);
+                      }, 0) /
+                        (15 * 1024 * 1024 * 1024)) *
+                        100,
+                    ),
+                  )}%`,
+                }}
               />
             </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-500">
-                {totalStorageKB} KB used
-              </span>
-              <span className="text-gray-400">
-                {remainingGB} GB remaining ({100 - storagePercentage}%)
-              </span>
-            </div>
+            <p className="text-xs text-gray-400">
+              {formatBytes(
+                projects.reduce((acc, p) => {
+                  const images = p.images || [];
+                  return acc + images.reduce((imgAcc, img) => imgAcc + (img.length * 3) / 4, 0);
+                }, 0),
+              )}{' '}
+              of 15 GB used · {projects.length} projects ·{' '}
+              {projects.reduce((acc, p) => acc + (p.images || []).length, 0)} images
+            </p>
           </div>
         </div>
       </div>
@@ -815,9 +898,20 @@ export default function AdminDashboard() {
           }`}>
           <SettingsIcon size={16} /> Settings
         </button>
+        <button onClick={() => setTab('messages')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all relative ${
+            tab === 'messages' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'
+          }`}>
+          <MessageSquare size={16} /> Messages
+          {messages.filter(m => !m.read).length > 0 && (
+            <span className="ml-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+              {messages.filter(m => !m.read).length}
+            </span>
+          )}
+        </button>
       </div>
 
-      {tab === 'about' ? <AboutEditor /> : tab === 'settings' ? <SettingsEditor /> : (
+      {tab === 'about' ? <AboutEditor /> : tab === 'settings' ? <SettingsEditor /> : tab === 'messages' ? <MessagesViewer /> : (
         <>
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
