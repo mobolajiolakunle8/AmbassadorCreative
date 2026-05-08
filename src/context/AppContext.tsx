@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, ReactNode 
 import { Project, initialProjects } from '../data/projects';
 import { AboutData, defaultAbout } from '../data/about';
 import { SiteSettings, SocialLinks, defaultSettings } from '../data/settings';
+import { ContactMessage } from '../data/messages';
 import { listenTo, writeTo, removeAt, updateAt } from '../firebase';
 
 type ViewMode = 'grid' | 'list';
@@ -13,6 +14,7 @@ interface AppState {
   projects: Project[];
   about: AboutData;
   settings: SiteSettings;
+  messages: ContactMessage[];
   theme: ThemeMode;
   viewMode: ViewMode;
   searchQuery: string;
@@ -39,6 +41,9 @@ interface AppContextType extends AppState {
   saveSettings: (settings: SiteSettings) => Promise<void>;
   saveSocialLinks: (socialLinks: SocialLinks) => Promise<void>;
   changeAdminPassword: (newPassword: string) => Promise<void>;
+  sendMessage: (msg: Omit<ContactMessage, 'id' | 'date' | 'read'>) => Promise<void>;
+  deleteMessage: (id: string) => Promise<void>;
+  markMessageRead: (id: string) => Promise<void>;
   toggleTheme: () => void;
   login: (password: string) => boolean;
   logout: () => void;
@@ -58,6 +63,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     projects: initialProjects,
     about: defaultAbout,
     settings: defaultSettings,
+    messages: [],
     theme: getInitialTheme(),
     viewMode: 'grid',
     searchQuery: '',
@@ -120,10 +126,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     });
 
+    const unsubMessages = listenTo<Record<string, ContactMessage>>('messages', data => {
+      if (data) {
+        const messages = Object.values(data).sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+        setState(prev => ({ ...prev, messages }));
+      }
+    });
+
     return () => {
       unsubProjects();
       unsubAbout();
       unsubSettings();
+      unsubMessages();
     };
   }, []);
 
@@ -173,6 +189,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await updateAt('settings', { adminPassword: newPassword });
   }, []);
 
+  const sendMessage = useCallback(async (msg: Omit<ContactMessage, 'id' | 'date' | 'read'>) => {
+    const id = Date.now().toString();
+    const fullMsg: ContactMessage = {
+      ...msg,
+      id,
+      date: new Date().toISOString(),
+      read: false,
+    };
+    await writeTo(`messages/${id}`, fullMsg);
+  }, []);
+
+  const deleteMessage = useCallback(async (id: string) => {
+    await removeAt(`messages/${id}`);
+  }, []);
+
+  const markMessageRead = useCallback(async (id: string) => {
+    await updateAt(`messages/${id}`, { read: true });
+  }, []);
+
   const login = useCallback((password: string) => {
     if (password === state.settings.adminPassword) {
       setState(p => ({ ...p, isAuthenticated: true, currentPage: 'admin' }));
@@ -207,7 +242,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...state,
       setViewMode, setSearchQuery, setCurrentPage, setSelectedCategory,
       setSelectedProject, setSidebarOpen, toggleStar, addProject, updateProject,
-      deleteProject, saveAbout, saveSettings, saveSocialLinks, changeAdminPassword, toggleTheme,
+      deleteProject, saveAbout, saveSettings, saveSocialLinks, changeAdminPassword,
+      sendMessage, deleteMessage, markMessageRead, toggleTheme,
       login, logout, getFilteredProjects, getProjectsByCategory,
     }}>
       {children}
