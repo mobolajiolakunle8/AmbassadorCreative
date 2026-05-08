@@ -46,7 +46,27 @@ export default function ContactPage() {
     e.preventDefault();
     setSending(true);
     try {
-      // 1. Save message to Firebase for admin dashboard
+      // 1. Send actual email via FormSubmit.co (free, no API key needed)
+      // First time: FormSubmit sends a confirmation email to verify the address
+      const emailResponse = await fetch(`https://formsubmit.co/ajax/${settings.email}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          _subject: `Portfolio Contact: ${formData.subject}`,
+          _template: 'table',
+          _captcha: 'false',
+          'Full Name': formData.name,
+          'Email Address': formData.email,
+          Subject: formData.subject,
+          Message: formData.message,
+        }),
+      });
+
+      if (!emailResponse.ok) {
+        throw new Error('Email delivery failed. Please try again or contact via WhatsApp.');
+      }
+
+      // 2. Save message to Firebase for admin dashboard
       await sendMessage({
         name: formData.name,
         email: formData.email,
@@ -54,11 +74,10 @@ export default function ContactPage() {
         message: formData.message,
       });
 
-      // 2. Send WhatsApp notification to admin
+      // 3. Send WhatsApp notification to admin
       const waText = encodeURIComponent(
         `📩 New Portfolio Message\n\nFrom: ${formData.name}\nEmail: ${formData.email}\nSubject: ${formData.subject}\n\n${formData.message}`
       );
-      // Open WhatsApp in a new tab — sends notification to admin's number
       window.open(`https://wa.me/${whatsappNumber}?text=${waText}`, '_blank');
 
       setSent(true);
@@ -176,7 +195,7 @@ export default function ContactPage() {
 
           {sent && (
             <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
-              ✅ Message sent successfully! Your message has been delivered and I received a WhatsApp notification. I'll get back to you soon.
+              ✅ Message sent! Email delivered to inbox, WhatsApp notification sent, and saved to admin dashboard. I'll get back to you soon.
             </div>
           )}
 
