@@ -28,9 +28,10 @@ const socialUrl = (platform: string, value: string) => {
 };
 
 export default function ContactPage() {
-  const { settings, about } = useApp();
+  const { settings, about, sendMessage } = useApp();
   const [formData, setFormData] = useState({ name: '', email: '', subject: '', message: '' });
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
   const whatsappNumber = settings.whatsapp.replace(/\D/g, '');
   const socials = [
     { icon: Camera, color: '#E1306C', label: 'Instagram', href: socialUrl('instagram', settings.socialLinks.instagram) },
@@ -41,12 +42,33 @@ export default function ContactPage() {
     { icon: Globe, color: '#34A853', label: 'Website', href: socialUrl('website', settings.socialLinks.website) },
   ].filter(s => s.href);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate sending
-    setSent(true);
-    setTimeout(() => setSent(false), 3000);
-    setFormData({ name: '', email: '', subject: '', message: '' });
+    setSending(true);
+    try {
+      // 1. Save message to Firebase for admin dashboard
+      await sendMessage({
+        name: formData.name,
+        email: formData.email,
+        subject: formData.subject,
+        message: formData.message,
+      });
+
+      // 2. Send WhatsApp notification to admin
+      const waText = encodeURIComponent(
+        `📩 New Portfolio Message\n\nFrom: ${formData.name}\nEmail: ${formData.email}\nSubject: ${formData.subject}\n\n${formData.message}`
+      );
+      // Open WhatsApp in a new tab — sends notification to admin's number
+      window.open(`https://wa.me/${whatsappNumber}?text=${waText}`, '_blank');
+
+      setSent(true);
+      setTimeout(() => setSent(false), 5000);
+      setFormData({ name: '', email: '', subject: '', message: '' });
+    } catch (err) {
+      alert('Failed to send message: ' + (err as Error).message);
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -154,7 +176,7 @@ export default function ContactPage() {
 
           {sent && (
             <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
-              ✅ Message sent successfully! I'll get back to you soon.
+              ✅ Message sent successfully! Your message has been delivered and I received a WhatsApp notification. I'll get back to you soon.
             </div>
           )}
 
@@ -207,10 +229,20 @@ export default function ContactPage() {
             </div>
             <button
               type="submit"
-              className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm"
+              disabled={sending}
+              className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm"
             >
-              <Send size={16} />
-              Send Message
+              {sending ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send size={16} />
+                  Send Message
+                </>
+              )}
             </button>
           </form>
         </div>
