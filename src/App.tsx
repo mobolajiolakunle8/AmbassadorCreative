@@ -83,12 +83,18 @@ function MainContent() {
   }
 }
 
+// ─── Meta tag helper ────────────────────────────────────────────────
+function setMeta(id: string, attr: string, value: string) {
+  const el = document.getElementById(id);
+  if (el) el.setAttribute(attr, value);
+}
+
 // ─── Layout ─────────────────────────────────────────────────────────
 function Layout() {
   const { projects, setSelectedProject } = useApp();
   const [shareProject, setShareProject] = useState<{ id: string; name: string; color: string } | null>(null);
 
-  // Deep link: auto-open project from URL ?project=ID
+  // Deep link: auto-open project from URL ?project=ID + set OG meta tags for preview
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const projectId = params.get('project');
@@ -97,6 +103,21 @@ function Layout() {
         const found = projects.find(p => p.id === projectId);
         if (found) {
           setSelectedProject(found);
+          // Update OG meta tags so social previews show the project
+          const title = found.name + ' — Ambassador Cre8tive Portfolio';
+          const desc = found.description || 'Check out this project from Ambassador Cre8tive portfolio.';
+          const previewImage = found.thumbnail || found.images?.[0] || 'https://placehold.co/1200x630/' + found.color.replace('#', '') + '/ffffff?text=' + encodeURIComponent(found.name);
+          const shareUrl = window.location.origin + window.location.pathname + '?project=' + projectId;
+
+          document.title = title;
+          setMeta('og-title', 'content', title);
+          setMeta('og-description', 'content', desc);
+          setMeta('og-image', 'content', previewImage);
+          setMeta('og-url', 'content', shareUrl);
+          setMeta('tw-title', 'content', title);
+          setMeta('tw-description', 'content', desc);
+          setMeta('tw-image', 'content', previewImage);
+
           window.history.replaceState({}, '', window.location.pathname);
         }
       };
