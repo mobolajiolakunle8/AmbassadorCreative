@@ -33,7 +33,7 @@ async function sendEmailViaWeb3Forms(emailTo: string, data: typeof initialFormDa
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      access_key: 'a8e7c6d5-b4a3-2f1e-9d8c-7b6a5f4e3d2c',
+      access_key: 'd9069b3e-abc5-4752-b9fa-a983b6ff93ff',
       subject: `Portfolio Contact: ${data.subject}`,
       from_name: data.name,
       email: data.email,
