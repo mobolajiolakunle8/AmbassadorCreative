@@ -35,7 +35,15 @@ function ContextMenu({ x, y, project, onClose }: { x: number; y: number; project
           {project.starred ? <StarOff size={16} /> : <Star size={16} />}
           {project.starred ? 'Unstar' : 'Star'}
         </button>
-        <button className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+        <button
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('open-share-modal', {
+              detail: { id: project.id, name: project.name, color: project.color }
+            }));
+            onClose();
+          }}
+          className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+        >
           <Share2 size={16} /> Share
         </button>
         {isAuthenticated && (
@@ -60,6 +68,7 @@ export default function FileGrid() {
     currentPage,
     selectedCategory,
     setSelectedCategory,
+    setCurrentPage,
     getFilteredProjects,
     getProjectsByCategory,
     setSelectedProject,
@@ -105,7 +114,12 @@ export default function FileGrid() {
                     style={{ backgroundColor: project.color + '15' }}
                   >
                     {project.thumbnail ? (
-                      <img src={project.thumbnail} alt={project.name} className="w-full h-full object-cover" />
+                      <img
+                        src={project.thumbnail}
+                        alt={project.name}
+                        className="w-full h-full object-cover block"
+                        onError={e => { e.currentTarget.style.display = 'none'; }}
+                      />
                     ) : (
                       <FileImage size={40} style={{ color: project.color }} className="opacity-70" />
                     )}
@@ -250,7 +264,12 @@ export default function FileGrid() {
                   style={{ backgroundColor: project.color + '12' }}
                 >
                   {project.thumbnail ? (
-                    <img src={project.thumbnail} alt={project.name} className="w-full h-full object-cover" />
+                    <img
+                      src={project.thumbnail}
+                      alt={project.name}
+                      className="w-full h-full object-cover block"
+                      onError={e => { e.currentTarget.style.display = 'none'; }}
+                    />
                   ) : (
                     <FileImage size={48} style={{ color: project.color }} className="opacity-60" />
                   )}
@@ -316,6 +335,208 @@ export default function FileGrid() {
             onClose={() => setContextMenu(null)}
           />
         )}
+      </div>
+    );
+  }
+
+  // === Starred View ===
+  if (currentPage === 'starred') {
+    const starredProjects = getFilteredProjects()
+      .filter(p => p.starred)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    return (
+      <div className="p-4 sm:p-6">
+        <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
+          <button onClick={() => setCurrentPage('drive')} className="hover:text-blue-600 transition-colors">
+            My Drive
+          </button>
+          <span>/</span>
+          <span className="text-gray-800 font-medium">Starred</span>
+        </div>
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-12 h-12 rounded-xl bg-yellow-50 flex items-center justify-center">
+            <Star size={24} className="text-yellow-500" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-gray-800">Starred Projects</h2>
+            <p className="text-sm text-gray-400">{starredProjects.length} starred project{starredProjects.length !== 1 ? 's' : ''}</p>
+          </div>
+        </div>
+
+        {starredProjects.length === 0 ? (
+          <div className="text-center py-20">
+            <Star size={64} className="mx-auto text-gray-200 mb-4" />
+            <p className="text-gray-400">No starred projects yet</p>
+            <p className="text-xs text-gray-300 mt-1">Star projects to find them here quickly</p>
+          </div>
+        ) : viewMode === 'grid' ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {starredProjects.map(project => (
+              <div
+                key={project.id}
+                onClick={() => setSelectedProject(project)}
+                onContextMenu={e => handleContextMenu(e, project)}
+                className="bg-white border border-gray-200 rounded-xl hover:shadow-md hover:border-gray-300 transition-all cursor-pointer group"
+              >
+                <div className="h-28 sm:h-32 rounded-t-xl flex items-center justify-center relative overflow-hidden"
+                  style={{ backgroundColor: project.color + '12' }}>
+                  {project.thumbnail ? (
+                    <img src={project.thumbnail} alt={project.name} className="w-full h-full object-cover block"
+                      onError={e => { e.currentTarget.style.display = 'none'; }} />
+                  ) : (
+                    <FileImage size={48} style={{ color: project.color }} className="opacity-60" />
+                  )}
+                  <Star size={14} className="absolute top-2 right-2 text-yellow-500 fill-yellow-500" />
+                  <button onClick={e => handleMoreClick(e, project)}
+                    className="absolute top-2 left-2 p-1 bg-white/80 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white">
+                    <MoreVertical size={14} className="text-gray-500" />
+                  </button>
+                </div>
+                <div className="p-3">
+                  <p className="text-xs font-medium text-gray-800 truncate">{project.name}</p>
+                  <div className="flex items-center justify-between mt-1">
+                    <p className="text-xs text-gray-400">{project.date}</p>
+                    <p className="text-xs text-gray-300">{project.size}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="grid grid-cols-12 gap-4 px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500">
+              <div className="col-span-6 sm:col-span-5">Name</div>
+              <div className="col-span-3 sm:col-span-3 hidden sm:block">Category</div>
+              <div className="col-span-3 sm:col-span-2 hidden sm:block">Date</div>
+              <div className="col-span-6 sm:col-span-2 text-right">Size</div>
+            </div>
+            {starredProjects.map(project => (
+              <div key={project.id} onClick={() => setSelectedProject(project)}
+                onContextMenu={e => handleContextMenu(e, project)}
+                className="grid grid-cols-12 gap-4 px-4 py-2.5 hover:bg-gray-50 cursor-pointer items-center border-b border-gray-50 last:border-0">
+                <div className="col-span-6 sm:col-span-5 flex items-center gap-3 min-w-0">
+                  <FileImage size={20} style={{ color: project.color }} className="flex-shrink-0" />
+                  <span className="text-sm text-gray-800 truncate">{project.name}</span>
+                  <Star size={12} className="text-yellow-500 fill-yellow-500 flex-shrink-0" />
+                </div>
+                <div className="col-span-3 hidden sm:block text-xs text-gray-500 capitalize">{project.category.replace('-', ' ')}</div>
+                <div className="col-span-2 hidden sm:block text-xs text-gray-500">{project.date}</div>
+                <div className="col-span-6 sm:col-span-2 text-xs text-gray-400 text-right">{project.size}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {contextMenu && <ContextMenu x={contextMenu.x} y={contextMenu.y} project={contextMenu.project} onClose={() => setContextMenu(null)} />}
+      </div>
+    );
+  }
+
+  // === Recent View ===
+  if (currentPage === 'recent') {
+    const recentProjects = [...getFilteredProjects()]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 20);
+
+    return (
+      <div className="p-4 sm:p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center">
+            <Star size={24} className="text-gray-400" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-gray-800">Recent Projects</h2>
+            <p className="text-sm text-gray-400">Most recent {recentProjects.length} project{recentProjects.length !== 1 ? 's' : ''}</p>
+          </div>
+        </div>
+
+        {recentProjects.length === 0 ? (
+          <div className="text-center py-20">
+            <FileImage size={64} className="mx-auto text-gray-200 mb-4" />
+            <p className="text-gray-400">No recent projects</p>
+          </div>
+        ) : viewMode === 'grid' ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {recentProjects.map(project => (
+              <div
+                key={project.id}
+                onClick={() => setSelectedProject(project)}
+                onContextMenu={e => handleContextMenu(e, project)}
+                className="bg-white border border-gray-200 rounded-xl hover:shadow-md hover:border-gray-300 transition-all cursor-pointer group"
+              >
+                <div className="h-28 sm:h-32 rounded-t-xl flex items-center justify-center relative overflow-hidden"
+                  style={{ backgroundColor: project.color + '12' }}>
+                  {project.thumbnail ? (
+                    <img src={project.thumbnail} alt={project.name} className="w-full h-full object-cover block"
+                      onError={e => { e.currentTarget.style.display = 'none'; }} />
+                  ) : (
+                    <FileImage size={48} style={{ color: project.color }} className="opacity-60" />
+                  )}
+                  {project.starred && <Star size={14} className="absolute top-2 right-2 text-yellow-500 fill-yellow-500" />}
+                  <button onClick={e => handleMoreClick(e, project)}
+                    className="absolute top-2 left-2 p-1 bg-white/80 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white">
+                    <MoreVertical size={14} className="text-gray-500" />
+                  </button>
+                </div>
+                <div className="p-3">
+                  <p className="text-xs font-medium text-gray-800 truncate">{project.name}</p>
+                  <div className="flex items-center justify-between mt-1">
+                    <p className="text-xs text-gray-400">{project.date}</p>
+                    <p className="text-xs text-gray-300">{project.size}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="grid grid-cols-12 gap-4 px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500">
+              <div className="col-span-6 sm:col-span-5">Name</div>
+              <div className="col-span-3 sm:col-span-3 hidden sm:block">Category</div>
+              <div className="col-span-3 sm:col-span-2 hidden sm:block">Date</div>
+              <div className="col-span-6 sm:col-span-2 text-right">Size</div>
+            </div>
+            {recentProjects.map(project => (
+              <div key={project.id} onClick={() => setSelectedProject(project)}
+                onContextMenu={e => handleContextMenu(e, project)}
+                className="grid grid-cols-12 gap-4 px-4 py-2.5 hover:bg-gray-50 cursor-pointer items-center border-b border-gray-50 last:border-0">
+                <div className="col-span-6 sm:col-span-5 flex items-center gap-3 min-w-0">
+                  <FileImage size={20} style={{ color: project.color }} className="flex-shrink-0" />
+                  <span className="text-sm text-gray-800 truncate">{project.name}</span>
+                  {project.starred && <Star size={12} className="text-yellow-500 fill-yellow-500 flex-shrink-0" />}
+                </div>
+                <div className="col-span-3 hidden sm:block text-xs text-gray-500 capitalize">{project.category.replace('-', ' ')}</div>
+                <div className="col-span-2 hidden sm:block text-xs text-gray-500">{project.date}</div>
+                <div className="col-span-6 sm:col-span-2 text-xs text-gray-400 text-right">{project.size}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {contextMenu && <ContextMenu x={contextMenu.x} y={contextMenu.y} project={contextMenu.project} onClose={() => setContextMenu(null)} />}
+      </div>
+    );
+  }
+
+  // === Trash View (Admin only) ===
+  if (currentPage === 'trash') {
+    return (
+      <div className="p-4 sm:p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center">
+            <Trash2 size={24} className="text-red-400" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-gray-800">Trash</h2>
+            <p className="text-sm text-gray-400">Deleted projects are permanently removed</p>
+          </div>
+        </div>
+        <div className="text-center py-20 bg-white rounded-xl border border-gray-200">
+          <Trash2 size={64} className="mx-auto text-gray-200 mb-4" />
+          <p className="text-gray-400 text-sm">Trash is empty</p>
+          <p className="text-xs text-gray-300 mt-1">Deleted projects are permanently removed and cannot be recovered</p>
+        </div>
       </div>
     );
   }
