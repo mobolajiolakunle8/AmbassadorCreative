@@ -27,9 +27,68 @@ const socialUrl = (platform: string, value: string) => {
   return `${bases[platform] || 'https://'}${handle}`;
 };
 
+function sendEmailViaFormSubmit(emailTo: string, data: typeof initialFormData) {
+  return new Promise<void>((resolve) => {
+    const iframeName = `formsubmit-${Date.now()}`;
+    const iframe = document.createElement('iframe');
+    iframe.name = iframeName;
+    iframe.style.display = 'none';
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `https://formsubmit.co/${encodeURIComponent(emailTo)}`;
+    form.target = iframeName;
+    form.style.display = 'none';
+
+    const fields: Record<string, string> = {
+      _subject: `Portfolio Contact: ${data.subject}`,
+      _template: 'table',
+      _captcha: 'false',
+      _replyto: data.email,
+      name: data.name,
+      email: data.email,
+      subject: data.subject,
+      message: data.message,
+    };
+
+    Object.entries(fields).forEach(([name, value]) => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = name;
+      input.value = value;
+      form.appendChild(input);
+    });
+
+    const cleanup = () => {
+      setTimeout(() => {
+        form.remove();
+        iframe.remove();
+      }, 1000);
+    };
+
+    iframe.onload = () => {
+      cleanup();
+      resolve();
+    };
+
+    document.body.appendChild(iframe);
+    document.body.appendChild(form);
+    form.submit();
+
+    // FormSubmit posts through a normal form, so CORS cannot block it. Resolve
+    // after a short delay even if the hidden iframe load event is suppressed.
+    setTimeout(() => {
+      cleanup();
+      resolve();
+    }, 2500);
+  });
+}
+
+const initialFormData = { name: '', email: '', subject: '', message: '' };
+
 export default function ContactPage() {
   const { settings, about, sendMessage } = useApp();
-  const [formData, setFormData] = useState({ name: '', email: '', subject: '', message: '' });
+  const [formData, setFormData] = useState(initialFormData);
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
   const whatsappNumber = settings.whatsapp.replace(/\D/g, '');
@@ -46,25 +105,9 @@ export default function ContactPage() {
     e.preventDefault();
     setSending(true);
     try {
-      // 1. Send actual email via FormSubmit.co (free, no API key needed)
-      // First time: FormSubmit sends a confirmation email to verify the address
-      const emailResponse = await fetch(`https://formsubmit.co/ajax/${settings.email}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({
-          _subject: `Portfolio Contact: ${formData.subject}`,
-          _template: 'table',
-          _captcha: 'false',
-          'Full Name': formData.name,
-          'Email Address': formData.email,
-          Subject: formData.subject,
-          Message: formData.message,
-        }),
-      });
-
-      if (!emailResponse.ok) {
-        throw new Error('Email delivery failed. Please try again or contact via WhatsApp.');
-      }
+      // 1. Send actual email through a normal FormSubmit form POST.
+      // This avoids the browser CORS error that caused "Failed to fetch".
+      await sendEmailViaFormSubmit(settings.email, formData);
 
       // 2. Save message to Firebase for admin dashboard
       await sendMessage({
@@ -82,7 +125,7 @@ export default function ContactPage() {
 
       setSent(true);
       setTimeout(() => setSent(false), 5000);
-      setFormData({ name: '', email: '', subject: '', message: '' });
+      setFormData(initialFormData);
     } catch (err) {
       alert('Failed to send message: ' + (err as Error).message);
     } finally {
