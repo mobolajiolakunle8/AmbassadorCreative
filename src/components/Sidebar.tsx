@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronRight,
   X,
+  Briefcase,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -23,6 +24,7 @@ export default function Sidebar() {
   const navItems = [
     { id: 'drive' as const, label: 'My Drive', icon: Home },
     { id: 'about' as const, label: 'About Me', icon: User },
+    { id: 'cv' as const, label: 'CV / Resume', icon: Briefcase },
     { id: 'contact' as const, label: 'Contact', icon: Mail },
   ];
 
@@ -141,18 +143,41 @@ export default function Sidebar() {
 
           {/* Quick Access */}
           <div className="space-y-0.5">
-            <button className="flex items-center gap-3 w-full px-4 py-2 rounded-full text-sm text-gray-700 hover:bg-gray-100 transition-all">
+            <button
+              onClick={() => { setCurrentPage('starred'); setSelectedCategory(null); }}
+              className={`flex items-center gap-3 w-full px-4 py-2 rounded-full text-sm font-medium transition-all
+                ${currentPage === 'starred'
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'text-gray-700 hover:bg-gray-100'
+                }`}
+            >
               <Star size={20} className="text-yellow-500" />
               <span>Starred</span>
             </button>
-            <button className="flex items-center gap-3 w-full px-4 py-2 rounded-full text-sm text-gray-700 hover:bg-gray-100 transition-all">
+            <button
+              onClick={() => { setCurrentPage('recent'); setSelectedCategory(null); }}
+              className={`flex items-center gap-3 w-full px-4 py-2 rounded-full text-sm font-medium transition-all
+                ${currentPage === 'recent'
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'text-gray-700 hover:bg-gray-100'
+                }`}
+            >
               <Clock size={20} className="text-gray-400" />
               <span>Recent</span>
             </button>
-            <button className="flex items-center gap-3 w-full px-4 py-2 rounded-full text-sm text-gray-700 hover:bg-gray-100 transition-all">
-              <Trash2 size={20} className="text-gray-400" />
-              <span>Trash</span>
-            </button>
+            {isAuthenticated && (
+              <button
+                onClick={() => { setCurrentPage('trash'); setSelectedCategory(null); }}
+                className={`flex items-center gap-3 w-full px-4 py-2 rounded-full text-sm font-medium transition-all
+                  ${currentPage === 'trash'
+                    ? 'bg-blue-50 text-blue-700'
+                    : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+              >
+                <Trash2 size={20} className="text-gray-400" />
+                <span>Trash</span>
+              </button>
+            )}
           </div>
 
           {/* Divider */}

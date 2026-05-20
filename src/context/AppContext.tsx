@@ -3,10 +3,11 @@ import { Project, initialProjects } from '../data/projects';
 import { AboutData, defaultAbout } from '../data/about';
 import { SiteSettings, SocialLinks, defaultSettings } from '../data/settings';
 import { ContactMessage } from '../data/messages';
+import { CVData, defaultCV } from '../data/cv';
 import { listenTo, writeTo, removeAt, updateAt } from '../firebase';
 
 type ViewMode = 'grid' | 'list';
-type Page = 'drive' | 'about' | 'contact' | 'admin' | 'category';
+type Page = 'drive' | 'about' | 'contact' | 'admin' | 'category' | 'starred' | 'recent' | 'trash' | 'cv';
 type SyncStatus = 'connecting' | 'synced' | 'offline';
 type ThemeMode = 'light' | 'dark';
 
@@ -15,6 +16,7 @@ interface AppState {
   about: AboutData;
   settings: SiteSettings;
   messages: ContactMessage[];
+  cv: CVData;
   theme: ThemeMode;
   viewMode: ViewMode;
   searchQuery: string;
@@ -38,6 +40,7 @@ interface AppContextType extends AppState {
   updateProject: (project: Project) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
   saveAbout: (about: AboutData) => Promise<void>;
+  saveCV: (cv: CVData) => Promise<void>;
   saveSettings: (settings: SiteSettings) => Promise<void>;
   saveSocialLinks: (socialLinks: SocialLinks) => Promise<void>;
   changeAdminPassword: (newPassword: string) => Promise<void>;
@@ -64,6 +67,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     about: defaultAbout,
     settings: defaultSettings,
     messages: [],
+    cv: defaultCV,
     theme: getInitialTheme(),
     viewMode: 'grid',
     searchQuery: '',
@@ -135,11 +139,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     });
 
+    const unsubCV = listenTo<CVData>('cv', data => {
+      if (data) {
+        setState(prev => ({ ...prev, cv: { ...defaultCV, ...data } }));
+      } else {
+        writeTo('cv', defaultCV).catch(() => {});
+      }
+    });
+
     return () => {
       unsubProjects();
       unsubAbout();
       unsubSettings();
       unsubMessages();
+      unsubCV();
     };
   }, []);
 
@@ -175,6 +188,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const saveAbout = useCallback(async (about: AboutData) => {
     await writeTo('about', about);
+  }, []);
+
+  const saveCV = useCallback(async (cv: CVData) => {
+    await writeTo('cv', cv);
   }, []);
 
   const saveSettings = useCallback(async (settings: SiteSettings) => {
@@ -242,7 +259,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...state,
       setViewMode, setSearchQuery, setCurrentPage, setSelectedCategory,
       setSelectedProject, setSidebarOpen, toggleStar, addProject, updateProject,
-      deleteProject, saveAbout, saveSettings, saveSocialLinks, changeAdminPassword,
+      deleteProject, saveAbout, saveCV, saveSettings, saveSocialLinks, changeAdminPassword,
       sendMessage, deleteMessage, markMessageRead, toggleTheme,
       login, logout, getFilteredProjects, getProjectsByCategory,
     }}>

@@ -17,7 +17,7 @@ export interface SiteSettings {
 
 export const defaultSettings: SiteSettings = {
   adminPassword: 'admin123',
-  email: 'mobolajiolakunle@gmail.com',
+  email: 'ambassadorcre8tive@gmail.com',
   phone: '+2349030192034',
   whatsapp: '+2349030192034',
   socialLinks: {

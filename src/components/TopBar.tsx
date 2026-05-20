@@ -5,9 +5,10 @@ import {
   List,
   Menu,
   HelpCircle,
+  Settings,
+  LogIn,
   Moon,
   Sun,
-  Lock,
 } from 'lucide-react';
 
 export default function TopBar() {
@@ -17,9 +18,13 @@ export default function TopBar() {
   const getPageTitle = () => {
     switch (currentPage) {
       case 'about': return 'About Me';
+      case 'cv': return 'Curriculum Vitae';
       case 'contact': return 'Contact';
       case 'admin': return 'Admin Dashboard';
       case 'category': return 'Projects';
+      case 'starred': return 'Starred';
+      case 'recent': return 'Recent';
+      case 'trash': return 'Trash';
       default: return 'My Drive';
     }
   };
@@ -109,12 +114,17 @@ export default function TopBar() {
           >
             {theme === 'light' ? <Moon size={20} className="text-gray-500" /> : <Sun size={20} className="text-yellow-500" />}
           </button>
-          <button 
+          {/* Admin login / dashboard icon */}
+          <button
             onClick={() => setCurrentPage('admin')}
-            className="hidden sm:block p-2 hover:bg-gray-100 rounded-full transition-colors"
+            className={`p-2 rounded-full transition-colors ${
+              isAuthenticated
+                ? 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+            }`}
             title={isAuthenticated ? 'Admin Dashboard' : 'Admin Login'}
           >
-            <Lock size={20} className={isAuthenticated ? 'text-blue-500' : 'text-gray-500'} />
+            {isAuthenticated ? <Settings size={20} /> : <LogIn size={20} />}
           </button>
 
           {/* User avatar */}

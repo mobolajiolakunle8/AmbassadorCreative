@@ -2,11 +2,12 @@ import { useApp } from '../context/AppContext';
 import { categories, Project } from '../data/projects';
 import { AboutData } from '../data/about';
 import { SiteSettings } from '../data/settings';
+import { CVData } from '../data/cv';
 import { compressImageToBase64, formatBytes } from '../firebase';
 import {
   Lock, LogOut, Plus, Edit3, Trash2, Save, X, Star, FileImage,
   BarChart3, FolderOpen, Search, Upload, ImagePlus, User, FolderKanban,
-  Settings as SettingsIcon, KeyRound, HardDrive, MessageSquare, Mail,
+  Settings as SettingsIcon, KeyRound, HardDrive, MessageSquare, Mail, Briefcase,
 } from 'lucide-react';
 import { useState, useRef } from 'react';
 
@@ -776,6 +777,174 @@ function MessagesViewer() {
   );
 }
 
+// === CV Editor ===
+function CVEditor() {
+  const { cv, saveCV } = useApp();
+  const [form, setForm] = useState<CVData>(cv);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await saveCV(form);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      alert('Save failed: ' + (e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addExperience = () => {
+    setForm(p => ({
+      ...p,
+      experience: [...p.experience, { id: Date.now().toString(), role: '', company: '', location: '', startDate: '', endDate: '', current: false, description: [''] }],
+    }));
+  };
+
+  const addEducation = () => {
+    setForm(p => ({
+      ...p,
+      education: [...p.education, { id: Date.now().toString(), degree: '', institution: '', location: '', year: '', details: '' }],
+    }));
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Summary */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-800 mb-3">Professional Summary</h3>
+        <textarea
+          rows={4}
+          value={form.summary}
+          onChange={e => setForm(p => ({ ...p, summary: e.target.value }))}
+          className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white focus:border-blue-300 focus:ring-2 focus:ring-blue-100 focus:outline-none resize-none"
+        />
+      </div>
+
+      {/* Experience */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-800">Work Experience</h3>
+          <button onClick={addExperience} className="text-xs text-blue-600 hover:text-blue-700 font-medium">+ Add Position</button>
+        </div>
+        <div className="space-y-4">
+          {form.experience.map((exp, i) => (
+            <div key={exp.id} className="p-4 bg-gray-50 rounded-xl space-y-3">
+              <div className="grid sm:grid-cols-2 gap-3">
+                <input type="text" placeholder="Role" value={exp.role} onChange={e => { const ex = [...form.experience]; ex[i].role = e.target.value; setForm(p => ({ ...p, experience: ex })); }} className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:border-blue-300 focus:outline-none" />
+                <input type="text" placeholder="Company" value={exp.company} onChange={e => { const ex = [...form.experience]; ex[i].company = e.target.value; setForm(p => ({ ...p, experience: ex })); }} className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:border-blue-300 focus:outline-none" />
+                <input type="text" placeholder="Location" value={exp.location} onChange={e => { const ex = [...form.experience]; ex[i].location = e.target.value; setForm(p => ({ ...p, experience: ex })); }} className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:border-blue-300 focus:outline-none" />
+                <div className="flex gap-2">
+                  <input type="month" value={exp.startDate} onChange={e => { const ex = [...form.experience]; ex[i].startDate = e.target.value; setForm(p => ({ ...p, experience: ex })); }} className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:border-blue-300 focus:outline-none" />
+                  <input type="month" value={exp.endDate} disabled={exp.current} onChange={e => { const ex = [...form.experience]; ex[i].endDate = e.target.value; setForm(p => ({ ...p, experience: ex })); }} className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:border-blue-300 focus:outline-none disabled:opacity-50" />
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-gray-600">
+                <input type="checkbox" checked={exp.current} onChange={e => { const ex = [...form.experience]; ex[i].current = e.target.checked; setForm(p => ({ ...p, experience: ex })); }} className="rounded" />
+                Current position
+              </label>
+              <div>
+                <p className="text-xs text-gray-500 mb-2">Description (one bullet per line)</p>
+                {exp.description.map((desc, j) => (
+                  <div key={j} className="flex gap-2 mb-2">
+                    <input type="text" value={desc} onChange={e => { const ex = [...form.experience]; const d = [...ex[i].description]; d[j] = e.target.value; ex[i].description = d; setForm(p => ({ ...p, experience: ex })); }} className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:border-blue-300 focus:outline-none" />
+                    <button onClick={() => { const ex = [...form.experience]; ex[i].description = ex[i].description.filter((_, idx) => idx !== j); setForm(p => ({ ...p, experience: ex })); }} className="p-2 text-red-400 hover:bg-red-50 rounded-lg"><X size={14} /></button>
+                  </div>
+                ))}
+                <button onClick={() => { const ex = [...form.experience]; ex[i].description.push(''); setForm(p => ({ ...p, experience: ex })); }} className="text-xs text-blue-600 hover:text-blue-700">+ Add bullet</button>
+              </div>
+              <button onClick={() => { setForm(p => ({ ...p, experience: p.experience.filter((_, idx) => idx !== i) })); }} className="text-xs text-red-500 hover:text-red-600">Remove position</button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Education */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-800">Education</h3>
+          <button onClick={addEducation} className="text-xs text-blue-600 hover:text-blue-700 font-medium">+ Add Education</button>
+        </div>
+        <div className="space-y-4">
+          {form.education.map((edu, i) => (
+            <div key={edu.id} className="p-4 bg-gray-50 rounded-xl space-y-3">
+              <div className="grid sm:grid-cols-2 gap-3">
+                <input type="text" placeholder="Degree" value={edu.degree} onChange={e => { const ed = [...form.education]; ed[i].degree = e.target.value; setForm(p => ({ ...p, education: ed })); }} className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:border-blue-300 focus:outline-none" />
+                <input type="text" placeholder="Institution" value={edu.institution} onChange={e => { const ed = [...form.education]; ed[i].institution = e.target.value; setForm(p => ({ ...p, education: ed })); }} className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:border-blue-300 focus:outline-none" />
+                <input type="text" placeholder="Location" value={edu.location} onChange={e => { const ed = [...form.education]; ed[i].location = e.target.value; setForm(p => ({ ...p, education: ed })); }} className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:border-blue-300 focus:outline-none" />
+                <input type="text" placeholder="Year" value={edu.year} onChange={e => { const ed = [...form.education]; ed[i].year = e.target.value; setForm(p => ({ ...p, education: ed })); }} className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:border-blue-300 focus:outline-none" />
+              </div>
+              <input type="text" placeholder="Details (e.g., honors, GPA)" value={edu.details} onChange={e => { const ed = [...form.education]; ed[i].details = e.target.value; setForm(p => ({ ...p, education: ed })); }} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:border-blue-300 focus:outline-none" />
+              <button onClick={() => { setForm(p => ({ ...p, education: p.education.filter((_, idx) => idx !== i) })); }} className="text-xs text-red-500 hover:text-red-600">Remove education</button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Skills */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-800 mb-3">Skills</h3>
+        <div className="space-y-4">
+          {form.skills.map((skillGroup, i) => (
+            <div key={i} className="p-4 bg-gray-50 rounded-xl">
+              <div className="flex gap-2 mb-2">
+                <input type="text" placeholder="Category (e.g., Design Software)" value={skillGroup.category} onChange={e => { const sk = [...form.skills]; sk[i].category = e.target.value; setForm(p => ({ ...p, skills: sk })); }} className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:border-blue-300 focus:outline-none" />
+                <button onClick={() => { setForm(p => ({ ...p, skills: p.skills.filter((_, idx) => idx !== i) })); }} className="p-2 text-red-400 hover:bg-red-50 rounded-lg"><X size={14} /></button>
+              </div>
+              <input type="text" placeholder="Skills (comma-separated)" value={skillGroup.items.join(', ')} onChange={e => { const sk = [...form.skills]; sk[i].items = e.target.value.split(',').map(s => s.trim()).filter(Boolean); setForm(p => ({ ...p, skills: sk })); }} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:border-blue-300 focus:outline-none" />
+            </div>
+          ))}
+        </div>
+        <button onClick={() => { setForm(p => ({ ...p, skills: [...p.skills, { category: '', items: [] }] })); }} className="mt-3 text-xs text-blue-600 hover:text-blue-700">+ Add skill category</button>
+      </div>
+
+      {/* Certifications */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-800 mb-3">Certifications</h3>
+        <div className="space-y-2">
+          {form.certifications.map((cert, i) => (
+            <div key={i} className="flex gap-2">
+              <input type="text" value={cert} onChange={e => { const c = [...form.certifications]; c[i] = e.target.value; setForm(p => ({ ...p, certifications: c })); }} className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white focus:border-blue-300 focus:outline-none" />
+              <button onClick={() => { setForm(p => ({ ...p, certifications: p.certifications.filter((_, idx) => idx !== i) })); }} className="p-2 text-red-400 hover:bg-red-50 rounded-lg"><X size={14} /></button>
+            </div>
+          ))}
+        </div>
+        <button onClick={() => { setForm(p => ({ ...p, certifications: [...p.certifications, ''] })); }} className="mt-3 text-xs text-blue-600 hover:text-blue-700">+ Add certification</button>
+      </div>
+
+      {/* Languages */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-800 mb-3">Languages</h3>
+        <div className="space-y-2">
+          {form.languages.map((lang, i) => (
+            <div key={i} className="flex gap-2">
+              <input type="text" value={lang} onChange={e => { const l = [...form.languages]; l[i] = e.target.value; setForm(p => ({ ...p, languages: l })); }} className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white focus:border-blue-300 focus:outline-none" />
+              <button onClick={() => { setForm(p => ({ ...p, languages: p.languages.filter((_, idx) => idx !== i) })); }} className="p-2 text-red-400 hover:bg-red-50 rounded-lg"><X size={14} /></button>
+            </div>
+          ))}
+        </div>
+        <button onClick={() => { setForm(p => ({ ...p, languages: [...p.languages, ''] })); }} className="mt-3 text-xs text-blue-600 hover:text-blue-700">+ Add language</button>
+      </div>
+
+      {/* References */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-800 mb-3">References</h3>
+        <input type="text" value={form.references} onChange={e => setForm(p => ({ ...p, references: e.target.value }))} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white focus:border-blue-300 focus:ring-2 focus:ring-blue-100 focus:outline-none" />
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+          {saving ? (<><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Saving...</>) : (<><Save size={16} />Save CV</>)}
+        </button>
+        {saved && <span className="text-sm text-green-600">✓ Saved and synced</span>}
+      </div>
+    </div>
+  );
+}
+
 // === Main Admin Dashboard ===
 export default function AdminDashboard() {
   const {
@@ -783,7 +952,7 @@ export default function AdminDashboard() {
     addProject, updateProject, deleteProject, setCurrentPage,
   } = useApp();
 
-  const [tab, setTab] = useState<'projects' | 'about' | 'settings' | 'messages'>('projects');
+  const [tab, setTab] = useState<'projects' | 'about' | 'settings' | 'messages' | 'cv'>('projects');
   const [showForm, setShowForm] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | undefined>();
   const [searchTerm, setSearchTerm] = useState('');
@@ -909,9 +1078,15 @@ export default function AdminDashboard() {
             </span>
           )}
         </button>
+        <button onClick={() => setTab('cv')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            tab === 'cv' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'
+          }`}>
+          <Briefcase size={16} /> CV / Resume
+        </button>
       </div>
 
-      {tab === 'about' ? <AboutEditor /> : tab === 'settings' ? <SettingsEditor /> : tab === 'messages' ? <MessagesViewer /> : (
+      {tab === 'about' ? <AboutEditor /> : tab === 'settings' ? <SettingsEditor /> : tab === 'messages' ? <MessagesViewer /> : tab === 'cv' ? <CVEditor /> : (
         <>
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">

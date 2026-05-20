@@ -5,6 +5,7 @@ import TopBar from './components/TopBar';
 import FileGrid from './components/FileGrid';
 import ProjectModal from './components/ProjectModal';
 import AboutPage from './components/AboutPage';
+import CVPage from './components/CVPage';
 import ContactPage from './components/ContactPage';
 import AdminDashboard from './components/AdminDashboard';
 import { X, Copy, Check, MessageCircle, Mail, Link2, Share2 } from 'lucide-react';
@@ -77,6 +78,7 @@ function MainContent() {
   const { currentPage } = useApp();
   switch (currentPage) {
     case 'about': return <AboutPage />;
+    case 'cv': return <CVPage />;
     case 'contact': return <ContactPage />;
     case 'admin': return <AdminDashboard />;
     default: return <FileGrid />;
