@@ -91,10 +91,37 @@ function setMeta(id: string, attr: string, value: string) {
   if (el) el.setAttribute(attr, value);
 }
 
+// ─── Loading Screen ─────────────────────────────────────────────────
+function LoadingScreen() {
+  return (
+    <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-white">
+      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold mb-4 animate-pulse">
+        AC
+      </div>
+      <h2 className="text-lg font-semibold text-gray-800 mb-1">Ambassador Cre8tive</h2>
+      <p className="text-sm text-gray-400 mb-6">Loading portfolio...</p>
+      <div className="w-40 h-1 bg-gray-100 rounded-full overflow-hidden">
+        <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-[loading_1.5s_ease-in-out_infinite]" />
+      </div>
+    </div>
+  );
+}
+
 // ─── Layout ─────────────────────────────────────────────────────────
 function Layout() {
-  const { projects, setSelectedProject } = useApp();
+  const { projects, setSelectedProject, syncStatus } = useApp();
   const [shareProject, setShareProject] = useState<{ id: string; name: string; color: string } | null>(null);
+  const [showLoading, setShowLoading] = useState(true);
+
+  // Hide loading screen once synced or after max 4 seconds
+  useEffect(() => {
+    if (syncStatus === 'synced') {
+      const t = setTimeout(() => setShowLoading(false), 300);
+      return () => clearTimeout(t);
+    }
+    const max = setTimeout(() => setShowLoading(false), 4000);
+    return () => clearTimeout(max);
+  }, [syncStatus]);
 
   // Deep link: auto-open project from URL ?project=ID + set OG meta tags for preview
   useEffect(() => {
@@ -140,6 +167,8 @@ function Layout() {
   }, []);
 
   return (
+    <>
+    {showLoading && <LoadingScreen />}
     <div className="flex h-screen bg-gray-50/50 overflow-hidden">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -158,6 +187,7 @@ function Layout() {
         />
       )}
     </div>
+    </>
   );
 }
 

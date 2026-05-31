@@ -4,7 +4,7 @@ import { AboutData, defaultAbout } from '../data/about';
 import { SiteSettings, SocialLinks, defaultSettings } from '../data/settings';
 import { ContactMessage } from '../data/messages';
 import { CVData, defaultCV } from '../data/cv';
-import { listenTo, writeTo, removeAt, updateAt } from '../firebase';
+import { listenTo, writeTo, removeAt, updateAt, cacheSet, cacheGet } from '../firebase';
 
 type ViewMode = 'grid' | 'list';
 type Page = 'drive' | 'about' | 'contact' | 'admin' | 'category' | 'starred' | 'recent' | 'trash' | 'cv';
@@ -84,21 +84,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('portfolio-theme', state.theme);
   }, [state.theme]);
 
-  // === Firebase real-time sync ===
+  // === Load cached data instantly, then sync from Firebase ===
+  useEffect(() => {
+    // 1. Load from sessionStorage cache FIRST (instant render)
+    const cachedProjects = cacheGet<Project[]>('projects');
+    const cachedAbout = cacheGet<AboutData>('about');
+    const cachedSettings = cacheGet<SiteSettings>('settings');
+    const cachedCV = cacheGet<CVData>('cv');
+
+    if (cachedProjects || cachedAbout || cachedSettings || cachedCV) {
+      setState(prev => ({
+        ...prev,
+        projects: cachedProjects || prev.projects,
+        about: cachedAbout ? { ...defaultAbout, ...cachedAbout } : prev.about,
+        settings: cachedSettings ? { ...defaultSettings, ...cachedSettings, socialLinks: { ...defaultSettings.socialLinks, ...(cachedSettings.socialLinks || {}) } } : prev.settings,
+        cv: cachedCV ? { ...defaultCV, ...cachedCV } : prev.cv,
+        syncStatus: 'connecting',
+      }));
+    }
+  }, []);
+
+  // === Firebase real-time sync (staggered for speed) ===
   useEffect(() => {
     let initialized = false;
 
+    const normalizeProject = (p: Project): Project => ({
+      ...p,
+      tools: Array.isArray(p.tools) ? p.tools : p.tools ? (Object.values(p.tools) as string[]) : [],
+      images: Array.isArray(p.images) ? p.images : p.images ? (Object.values(p.images) as string[]) : [],
+    });
+
+    // Priority 1: Projects + Settings (needed for first render)
     const unsubProjects = listenTo<Record<string, Project>>('projects', data => {
       if (data) {
-        // Normalize: Firebase may convert arrays to objects, and strips empty arrays
-        const projects: Project[] = Object.values(data).map(p => ({
-          ...p,
-          tools: Array.isArray(p.tools) ? p.tools : p.tools ? (Object.values(p.tools) as string[]) : [],
-          images: Array.isArray(p.images) ? p.images : p.images ? (Object.values(p.images) as string[]) : [],
-        }));
+        const projects = Object.values(data).map(normalizeProject);
         setState(prev => ({ ...prev, projects, syncStatus: 'synced' }));
+        // Cache metadata only (strip heavy base64 images, keep URLs)
+        const lightweight = projects.map(p => ({
+          ...p,
+          images: (p.images || []).filter(img => !img.startsWith('data:')),
+          thumbnail: p.thumbnail?.startsWith('data:') ? '' : (p.thumbnail || ''),
+        }));
+        cacheSet('projects', lightweight);
       } else if (!initialized) {
-        // No data exists yet — seed initial projects
         const seed: Record<string, Project> = {};
         initialProjects.forEach(p => { seed[p.id] = p; });
         writeTo('projects', seed).catch(() => {});
@@ -107,52 +135,62 @@ export function AppProvider({ children }: { children: ReactNode }) {
       initialized = true;
     });
 
-    const unsubAbout = listenTo<AboutData>('about', data => {
-      if (data) {
-        setState(prev => ({ ...prev, about: { ...defaultAbout, ...data } }));
-      } else {
-        writeTo('about', defaultAbout).catch(() => {});
-      }
-    });
-
     const unsubSettings = listenTo<SiteSettings>('settings', data => {
       if (data) {
-        setState(prev => ({
-          ...prev,
-          settings: {
-            ...defaultSettings,
-            ...data,
-            socialLinks: { ...defaultSettings.socialLinks, ...(data.socialLinks || {}) },
-          },
-        }));
+        const settings = { ...defaultSettings, ...data, socialLinks: { ...defaultSettings.socialLinks, ...(data.socialLinks || {}) } };
+        setState(prev => ({ ...prev, settings }));
+        cacheSet('settings', settings);
       } else {
         writeTo('settings', defaultSettings).catch(() => {});
       }
     });
 
-    const unsubMessages = listenTo<Record<string, ContactMessage>>('messages', data => {
-      if (data) {
-        const messages = Object.values(data).sort(
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
-        setState(prev => ({ ...prev, messages }));
-      }
-    });
+    // Priority 2: About + CV (loaded after a tiny delay to unblock first paint)
+    let unsubAbout = () => {};
+    let unsubCV = () => {};
+    const timer1 = setTimeout(() => {
+      unsubAbout = listenTo<AboutData>('about', data => {
+        if (data) {
+          const about = { ...defaultAbout, ...data };
+          setState(prev => ({ ...prev, about }));
+          cacheSet('about', about);
+        } else {
+          writeTo('about', defaultAbout).catch(() => {});
+        }
+      });
 
-    const unsubCV = listenTo<CVData>('cv', data => {
-      if (data) {
-        setState(prev => ({ ...prev, cv: { ...defaultCV, ...data } }));
-      } else {
-        writeTo('cv', defaultCV).catch(() => {});
-      }
-    });
+      unsubCV = listenTo<CVData>('cv', data => {
+        if (data) {
+          const cv = { ...defaultCV, ...data };
+          setState(prev => ({ ...prev, cv }));
+          cacheSet('cv', cv);
+        } else {
+          writeTo('cv', defaultCV).catch(() => {});
+        }
+      });
+    }, 100);
+
+    // Priority 3: Messages (only needed for admin, lowest priority)
+    let unsubMessages = () => {};
+    const timer2 = setTimeout(() => {
+      unsubMessages = listenTo<Record<string, ContactMessage>>('messages', data => {
+        if (data) {
+          const messages = Object.values(data).sort(
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
+          setState(prev => ({ ...prev, messages }));
+        }
+      });
+    }, 300);
 
     return () => {
       unsubProjects();
-      unsubAbout();
       unsubSettings();
-      unsubMessages();
+      unsubAbout();
       unsubCV();
+      unsubMessages();
+      clearTimeout(timer1);
+      clearTimeout(timer2);
     };
   }, []);
 

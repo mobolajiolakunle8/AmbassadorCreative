@@ -21,16 +21,20 @@ export default function CVPage() {
 
       {/* CV Header */}
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden mb-6">
-        <div className="h-32 sm:h-40 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 relative overflow-hidden">
-          {cv.coverImage && (
-            <img src={cv.coverImage} alt="Cover" className="absolute inset-0 w-full h-full object-cover" draggable={false} />
+        <div className="h-32 sm:h-40 relative overflow-hidden">
+          {cv.cvCover ? (
+            <img src={cv.cvCover} alt="Cover" className="w-full h-full object-cover" draggable={false} onContextMenu={e => e.preventDefault()} />
+          ) : (
+            <div className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
           )}
         </div>
         <div className="px-4 sm:px-8 pb-6">
-          <div className="flex flex-col sm:flex-row items-start gap-4 -mt-12 sm:-mt-16 relative z-10">
+          <div className="flex flex-col sm:flex-row items-start gap-4 -mt-12 sm:-mt-16">
             <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-2xl bg-white p-1 shadow-lg">
-              {cv.profilePhoto ? (
-                <img src={cv.profilePhoto} alt={about.name} className="w-full h-full rounded-xl object-cover" draggable={false} />
+              {cv.cvPhoto ? (
+                <img src={cv.cvPhoto} alt={about.name} className="w-full h-full rounded-xl object-cover" draggable={false} onContextMenu={e => e.preventDefault()} />
+              ) : about.websiteDp ? (
+                <img src={about.websiteDp} alt={about.name} className="w-full h-full rounded-xl object-cover" draggable={false} onContextMenu={e => e.preventDefault()} />
               ) : (
                 <div className="w-full h-full rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-3xl sm:text-4xl font-bold">
                   {initials}

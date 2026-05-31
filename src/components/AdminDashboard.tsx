@@ -3,7 +3,7 @@ import { categories, Project } from '../data/projects';
 import { AboutData } from '../data/about';
 import { SiteSettings } from '../data/settings';
 import { CVData } from '../data/cv';
-import { compressImageToBase64, formatBytes } from '../firebase';
+import { compressImageToBase64, formatBytes, uploadImageToStorage } from '../firebase';
 import {
   Lock, LogOut, Plus, Edit3, Trash2, Save, X, Star, FileImage,
   BarChart3, FolderOpen, Search, Upload, ImagePlus, User, FolderKanban,
@@ -90,8 +90,9 @@ function ProjectForm({
         const file = files[i];
         setUploadProgress({ current: i + 1, total: files.length });
         try {
-          const result = await compressImageToBase64(file);
-          newImages.push(result.dataUrl);
+          // Upload compressed image to Firebase Storage — returns a lightweight URL
+          const result = await uploadImageToStorage(file, 'projects');
+          newImages.push(result.url);
           totalOriginal += result.originalBytes;
           totalCompressed += result.compressedBytes;
           newLog.push({
@@ -662,8 +663,12 @@ function SettingsEditor() {
 function MessagesViewer() {
   const { messages, deleteMessage, markMessageRead } = useApp();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [msgPage, setMsgPage] = useState(1);
+  const MSG_PER_PAGE = 10;
 
   const unreadCount = messages.filter(m => !m.read).length;
+  const totalMsgPages = Math.ceil(messages.length / MSG_PER_PAGE);
+  const pagedMessages = messages.slice((msgPage - 1) * MSG_PER_PAGE, msgPage * MSG_PER_PAGE);
 
   return (
     <div className="space-y-4">
@@ -684,7 +689,7 @@ function MessagesViewer() {
         </div>
       ) : (
         <div className="space-y-2">
-          {messages.map(msg => {
+          {pagedMessages.map(msg => {
             const isExpanded = expandedId === msg.id;
             return (
               <div
@@ -771,6 +776,15 @@ function MessagesViewer() {
               </div>
             );
           })}
+          {totalMsgPages > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-4">
+              <button onClick={() => setMsgPage(p => Math.max(1, p - 1))} disabled={msgPage === 1}
+                className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-30">Previous</button>
+              <span className="text-xs text-gray-400">Page {msgPage} of {totalMsgPages}</span>
+              <button onClick={() => setMsgPage(p => Math.min(totalMsgPages, p + 1))} disabled={msgPage === totalMsgPages}
+                className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-30">Next</button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -783,10 +797,28 @@ function CVEditor() {
   const [form, setForm] = useState<CVData>(cv);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [uploadingCover, setUploadingCover] = useState(false);
-  const [uploadingProfile, setUploadingProfile] = useState(false);
-  const coverInputRef = useRef<HTMLInputElement>(null);
-  const profileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState<'photo' | 'cover' | null>(null);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'photo' | 'cover') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(type);
+    try {
+      // Small profile photo: keep base64; larger cover: upload to Storage
+      if (type === 'photo') {
+        const result = await compressImageToBase64(file, 400 * 1024);
+        setForm(p => ({ ...p, cvPhoto: result.dataUrl }));
+      } else {
+        const result = await uploadImageToStorage(file, 'cv');
+        setForm(p => ({ ...p, cvCover: result.url }));
+      }
+    } catch (err) {
+      alert('Upload failed: ' + (err as Error).message);
+    } finally {
+      setUploading(null);
+      e.target.value = '';
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -798,36 +830,6 @@ function CVEditor() {
       alert('Save failed: ' + (e as Error).message);
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingCover(true);
-    try {
-      const result = await compressImageToBase64(file, 800 * 1024);
-      setForm(p => ({ ...p, coverImage: result.dataUrl }));
-    } catch (err) {
-      alert('Cover upload failed: ' + (err as Error).message);
-    } finally {
-      setUploadingCover(false);
-      if (coverInputRef.current) coverInputRef.current.value = '';
-    }
-  };
-
-  const handleProfileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingProfile(true);
-    try {
-      const result = await compressImageToBase64(file, 400 * 1024);
-      setForm(p => ({ ...p, profilePhoto: result.dataUrl }));
-    } catch (err) {
-      alert('Profile photo upload failed: ' + (err as Error).message);
-    } finally {
-      setUploadingProfile(false);
-      if (profileInputRef.current) profileInputRef.current.value = '';
     }
   };
 
@@ -848,50 +850,51 @@ function CVEditor() {
   return (
     <div className="space-y-6">
       {/* CV Images */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-        <h3 className="text-lg font-semibold text-gray-800">CV Visuals</h3>
-        
-        <div className="grid sm:grid-cols-2 gap-6">
-          {/* Cover Image */}
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-2">Cover Image <span className="text-gray-400 font-normal">(Suggested: 1200 x 300 px)</span></label>
-            <div className="relative w-full h-24 bg-gray-100 rounded-lg overflow-hidden border border-gray-200 mb-2">
-              {form.coverImage ? (
-                <img src={form.coverImage} alt="Cover preview" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">No cover image</div>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <label className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 cursor-pointer transition-colors">
-                <input ref={coverInputRef} type="file" accept="image/*" onChange={handleCoverUpload} disabled={uploadingCover} className="hidden" />
-                {uploadingCover ? 'Uploading...' : <><ImagePlus size={14} /> Upload Cover</>}
-              </label>
-              {form.coverImage && (
-                <button onClick={() => setForm(p => ({ ...p, coverImage: '' }))} className="px-3 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50">Remove</button>
-              )}
-            </div>
-          </div>
-
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-800 mb-3">CV Images</h3>
+        <div className="grid sm:grid-cols-2 gap-4">
           {/* Profile Photo */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-2">Profile Photo <span className="text-gray-400 font-normal">(Suggested: 300 x 300 px)</span></label>
-            <div className="relative w-24 h-24 bg-gray-100 rounded-lg overflow-hidden border border-gray-200 mb-2 mx-auto sm:mx-0">
-              {form.profilePhoto ? (
-                <img src={form.profilePhoto} alt="Profile preview" className="w-full h-full object-cover" />
+            <label className="block text-xs font-medium text-gray-500 mb-2">Profile Photo</label>
+            <div className="flex items-center gap-3 mb-2">
+              {form.cvPhoto ? (
+                <img src={form.cvPhoto} alt="CV Photo" className="w-16 h-16 rounded-xl object-cover border border-gray-200" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">No photo</div>
+                <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center text-gray-400 text-xs">No photo</div>
+              )}
+              <div className="flex-1">
+                <label className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 cursor-pointer transition-colors">
+                  <input type="file" accept="image/*" onChange={e => handleImageUpload(e, 'photo')} disabled={uploading === 'photo'} className="hidden" />
+                  {uploading === 'photo' ? 'Uploading...' : 'Upload Photo'}
+                </label>
+                {form.cvPhoto && (
+                  <button onClick={() => setForm(p => ({ ...p, cvPhoto: '' }))} className="ml-2 text-xs text-red-500 hover:text-red-600">Remove</button>
+                )}
+              </div>
+            </div>
+            <p className="text-[11px] text-gray-400">💡 Suggested: 400×400px (square) or 500×500px. Max 800KB.</p>
+          </div>
+
+          {/* Cover Image */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-2">Cover / Banner Image</label>
+            <div className="mb-2">
+              {form.cvCover ? (
+                <img src={form.cvCover} alt="CV Cover" className="w-full h-20 rounded-xl object-cover border border-gray-200" />
+              ) : (
+                <div className="w-full h-20 rounded-xl bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
               )}
             </div>
-            <div className="flex gap-2">
-              <label className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 cursor-pointer transition-colors">
-                <input ref={profileInputRef} type="file" accept="image/*" onChange={handleProfileUpload} disabled={uploadingProfile} className="hidden" />
-                {uploadingProfile ? 'Uploading...' : <><ImagePlus size={14} /> Upload Photo</>}
+            <div className="flex items-center gap-2">
+              <label className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 cursor-pointer transition-colors">
+                <input type="file" accept="image/*" onChange={e => handleImageUpload(e, 'cover')} disabled={uploading === 'cover'} className="hidden" />
+                {uploading === 'cover' ? 'Uploading...' : 'Upload Cover'}
               </label>
-              {form.profilePhoto && (
-                <button onClick={() => setForm(p => ({ ...p, profilePhoto: '' }))} className="px-3 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50">Remove</button>
+              {form.cvCover && (
+                <button onClick={() => setForm(p => ({ ...p, cvCover: '' }))} className="text-xs text-red-500 hover:text-red-600">Remove</button>
               )}
             </div>
+            <p className="text-[11px] text-gray-400 mt-1">💡 Suggested: 1200×400px (3:1 ratio) or 1500×500px. Max 800KB.</p>
           </div>
         </div>
       </div>
@@ -1039,6 +1042,8 @@ export default function AdminDashboard() {
   const [showForm, setShowForm] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | undefined>();
   const [searchTerm, setSearchTerm] = useState('');
+  const [projectPage, setProjectPage] = useState(1);
+  const PROJECTS_PER_PAGE = 10;
 
   if (!isAuthenticated) return <LoginForm onLogin={login} />;
 
@@ -1046,6 +1051,8 @@ export default function AdminDashboard() {
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
+  const totalProjectPages = Math.ceil(filteredProjects.length / PROJECTS_PER_PAGE);
+  const pagedProjects = filteredProjects.slice((projectPage - 1) * PROJECTS_PER_PAGE, projectPage * PROJECTS_PER_PAGE);
 
   const categoryStats = categories.map(cat => ({
     ...cat,
@@ -1216,7 +1223,7 @@ export default function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredProjects.map(project => (
+                  {pagedProjects.map(project => (
                     <tr key={project.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
@@ -1272,6 +1279,15 @@ export default function AdminDashboard() {
               </div>
             )}
           </div>
+          {totalProjectPages > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-4">
+              <button onClick={() => setProjectPage(p => Math.max(1, p - 1))} disabled={projectPage === 1}
+                className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-30">Previous</button>
+              <span className="text-xs text-gray-400">Page {projectPage} of {totalProjectPages}</span>
+              <button onClick={() => setProjectPage(p => Math.min(totalProjectPages, p + 1))} disabled={projectPage === totalProjectPages}
+                className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-30">Next</button>
+            </div>
+          )}
         </>
       )}
 

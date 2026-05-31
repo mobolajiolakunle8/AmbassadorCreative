@@ -11,6 +11,7 @@ import {
   StarOff,
 } from 'lucide-react';
 import { useState } from 'react';
+import LazyImage from './LazyImage';
 
 function ContextMenu({ x, y, project, onClose }: { x: number; y: number; project: any; onClose: () => void }) {
   const { toggleStar, setSelectedProject, deleteProject, isAuthenticated } = useApp();
@@ -114,12 +115,7 @@ export default function FileGrid() {
                     style={{ backgroundColor: project.color + '15' }}
                   >
                     {project.thumbnail ? (
-                      <img
-                        src={project.thumbnail}
-                        alt={project.name}
-                        className="w-full h-full object-cover block"
-                        onError={e => { e.currentTarget.style.display = 'none'; }}
-                      />
+                      <LazyImage src={project.thumbnail} alt={project.name} className="w-full h-full object-cover block" fallbackColor={project.color + '20'} />
                     ) : (
                       <FileImage size={40} style={{ color: project.color }} className="opacity-70" />
                     )}
@@ -264,12 +260,7 @@ export default function FileGrid() {
                   style={{ backgroundColor: project.color + '12' }}
                 >
                   {project.thumbnail ? (
-                    <img
-                      src={project.thumbnail}
-                      alt={project.name}
-                      className="w-full h-full object-cover block"
-                      onError={e => { e.currentTarget.style.display = 'none'; }}
-                    />
+                    <LazyImage src={project.thumbnail} alt={project.name} className="w-full h-full object-cover block" fallbackColor={project.color + '20'} />
                   ) : (
                     <FileImage size={48} style={{ color: project.color }} className="opacity-60" />
                   )}
@@ -382,8 +373,7 @@ export default function FileGrid() {
                 <div className="h-28 sm:h-32 rounded-t-xl flex items-center justify-center relative overflow-hidden"
                   style={{ backgroundColor: project.color + '12' }}>
                   {project.thumbnail ? (
-                    <img src={project.thumbnail} alt={project.name} className="w-full h-full object-cover block"
-                      onError={e => { e.currentTarget.style.display = 'none'; }} />
+                    <LazyImage src={project.thumbnail} alt={project.name} className="w-full h-full object-cover block" fallbackColor={project.color + '20'} />
                   ) : (
                     <FileImage size={48} style={{ color: project.color }} className="opacity-60" />
                   )}
@@ -468,8 +458,7 @@ export default function FileGrid() {
                 <div className="h-28 sm:h-32 rounded-t-xl flex items-center justify-center relative overflow-hidden"
                   style={{ backgroundColor: project.color + '12' }}>
                   {project.thumbnail ? (
-                    <img src={project.thumbnail} alt={project.name} className="w-full h-full object-cover block"
-                      onError={e => { e.currentTarget.style.display = 'none'; }} />
+                    <LazyImage src={project.thumbnail} alt={project.name} className="w-full h-full object-cover block" fallbackColor={project.color + '20'} />
                   ) : (
                     <FileImage size={48} style={{ color: project.color }} className="opacity-60" />
                   )}

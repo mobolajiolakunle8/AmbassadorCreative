@@ -24,9 +24,9 @@ export interface CVSkill {
 }
 
 export interface CVData {
-  profilePhoto?: string;
-  coverImage?: string;
   summary: string;
+  cvPhoto: string;
+  cvCover: string;
   experience: CVExperience[];
   education: CVEducation[];
   skills: CVSkill[];
@@ -36,9 +36,9 @@ export interface CVData {
 }
 
 export const defaultCV: CVData = {
-  profilePhoto: '',
-  coverImage: '',
   summary: 'Creative and detail-oriented Graphic Designer with 5+ years of experience delivering exceptional visual solutions for diverse clients. Proficient in brand identity, print design, digital marketing collateral, and creative collaborations. Passionate about transforming ideas into compelling visual narratives that drive engagement and business growth.',
+  cvPhoto: '',
+  cvCover: '',
   experience: [
     {
       id: 'exp1',
