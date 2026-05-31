@@ -655,6 +655,94 @@ function SettingsEditor() {
           {passwordSaved && <span className="text-sm text-green-600">Password updated</span>}
         </div>
       </div>
+
+      <DbCleanup />
+    </div>
+  );
+}
+
+// === Database Cleanup — Migrate base64 images to Firebase Storage ===
+function DbCleanup() {
+  const { projects, updateProject } = useApp();
+  const [migrating, setMigrating] = useState(false);
+  const [status, setStatus] = useState('');
+
+  // Count how many projects have base64 images
+  const base64Count = projects.filter(p =>
+    (p.images || []).some(img => img.startsWith('data:')) ||
+    (p.thumbnail && p.thumbnail.startsWith('data:'))
+  ).length;
+
+  const migrateAll = async () => {
+    if (!window.confirm(`Migrate ${base64Count} project(s) from base64 to Firebase Storage? This will speed up your website significantly.`)) return;
+    setMigrating(true);
+    let done = 0;
+    for (const project of projects) {
+      const images = project.images || [];
+      const hasBase64 = images.some(img => img.startsWith('data:')) || (project.thumbnail && project.thumbnail.startsWith('data:'));
+      if (!hasBase64) continue;
+
+      setStatus(`Migrating ${++done}/${base64Count}: ${project.name}...`);
+      try {
+        const newImages: string[] = [];
+        for (const img of images) {
+          if (img.startsWith('data:')) {
+            // Convert base64 to blob and upload to Storage
+            const blob = await (await fetch(img)).blob();
+            const file = new File([blob], `migrate_${Date.now()}.jpg`, { type: 'image/jpeg' });
+            const result = await uploadImageToStorage(file, 'projects');
+            newImages.push(result.url);
+          } else {
+            newImages.push(img); // Already a URL, keep it
+          }
+        }
+
+        let newThumb = project.thumbnail || '';
+        if (newThumb.startsWith('data:')) {
+          newThumb = newImages[0] || '';
+        }
+
+        await updateProject({ ...project, images: newImages, thumbnail: newThumb });
+      } catch (err) {
+        console.error(`Failed to migrate ${project.name}:`, err);
+      }
+    }
+    setStatus(`✅ Done! Migrated ${done} project(s). Your site is now much faster.`);
+    setMigrating(false);
+  };
+
+  if (base64Count === 0) {
+    return (
+      <div className="bg-green-50 rounded-xl border border-green-200 p-6 mt-6">
+        <h3 className="text-lg font-semibold text-green-800 flex items-center gap-2 mb-1">
+          <HardDrive size={18} /> Database Health
+        </h3>
+        <p className="text-sm text-green-600">✅ All images are using Firebase Storage URLs. Database is clean and fast.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-amber-50 rounded-xl border border-amber-200 p-6 mt-6">
+      <h3 className="text-lg font-semibold text-amber-800 flex items-center gap-2 mb-1">
+        <HardDrive size={18} /> Database Health — Action Needed
+      </h3>
+      <p className="text-sm text-amber-700 mb-3">
+        ⚠️ <strong>{base64Count} project(s)</strong> still have heavy base64 images stored directly in the database.
+        This slows down every page load. Migrate them to Firebase Storage for 10× faster sync.
+      </p>
+      {status && <p className="text-sm text-gray-600 mb-3">{status}</p>}
+      <button
+        onClick={migrateAll}
+        disabled={migrating}
+        className="flex items-center gap-2 px-5 py-2.5 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 disabled:opacity-50"
+      >
+        {migrating ? (
+          <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Migrating...</>
+        ) : (
+          <><Upload size={16} /> Migrate {base64Count} Project(s) to Storage</>
+        )}
+      </button>
     </div>
   );
 }

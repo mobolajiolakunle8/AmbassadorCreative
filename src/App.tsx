@@ -91,18 +91,16 @@ function setMeta(id: string, attr: string, value: string) {
   if (el) el.setAttribute(attr, value);
 }
 
-// ─── Loading Screen ─────────────────────────────────────────────────
-function LoadingScreen() {
+// ─── Splash Screen (brief, never blocks) ───────────────────────────
+function SplashScreen({ visible }: { visible: boolean }) {
+  if (!visible) return null;
   return (
-    <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-white">
-      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold mb-4 animate-pulse">
+    <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-white transition-opacity duration-300"
+      style={{ opacity: visible ? 1 : 0, pointerEvents: visible ? 'auto' : 'none' }}>
+      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold mb-3 animate-pulse">
         AC
       </div>
-      <h2 className="text-lg font-semibold text-gray-800 mb-1">Ambassador Cre8tive</h2>
-      <p className="text-sm text-gray-400 mb-6">Loading portfolio...</p>
-      <div className="w-40 h-1 bg-gray-100 rounded-full overflow-hidden">
-        <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-[loading_1.5s_ease-in-out_infinite]" />
-      </div>
+      <p className="text-sm text-gray-400">Ambassador Cre8tive</p>
     </div>
   );
 }
@@ -111,15 +109,15 @@ function LoadingScreen() {
 function Layout() {
   const { projects, setSelectedProject, syncStatus } = useApp();
   const [shareProject, setShareProject] = useState<{ id: string; name: string; color: string } | null>(null);
-  const [showLoading, setShowLoading] = useState(true);
+  const [showSplash, setShowSplash] = useState(true);
 
-  // Hide loading screen once synced or after max 4 seconds
+  // Splash disappears as soon as synced OR max 1.2 seconds (never blocks)
   useEffect(() => {
     if (syncStatus === 'synced') {
-      const t = setTimeout(() => setShowLoading(false), 300);
+      const t = setTimeout(() => setShowSplash(false), 150);
       return () => clearTimeout(t);
     }
-    const max = setTimeout(() => setShowLoading(false), 4000);
+    const max = setTimeout(() => setShowSplash(false), 1200);
     return () => clearTimeout(max);
   }, [syncStatus]);
 
@@ -168,7 +166,7 @@ function Layout() {
 
   return (
     <>
-    {showLoading && <LoadingScreen />}
+    <SplashScreen visible={showSplash} />
     <div className="flex h-screen bg-gray-50/50 overflow-hidden">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">

@@ -84,27 +84,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('portfolio-theme', state.theme);
   }, [state.theme]);
 
-  // === Load cached data instantly, then sync from Firebase ===
+  // === Load cached data instantly — render UI before Firebase connects ===
   useEffect(() => {
-    // 1. Load from sessionStorage cache FIRST (instant render)
     const cachedProjects = cacheGet<Project[]>('projects');
     const cachedAbout = cacheGet<AboutData>('about');
     const cachedSettings = cacheGet<SiteSettings>('settings');
     const cachedCV = cacheGet<CVData>('cv');
 
-    if (cachedProjects || cachedAbout || cachedSettings || cachedCV) {
-      setState(prev => ({
-        ...prev,
-        projects: cachedProjects || prev.projects,
-        about: cachedAbout ? { ...defaultAbout, ...cachedAbout } : prev.about,
-        settings: cachedSettings ? { ...defaultSettings, ...cachedSettings, socialLinks: { ...defaultSettings.socialLinks, ...(cachedSettings.socialLinks || {}) } } : prev.settings,
-        cv: cachedCV ? { ...defaultCV, ...cachedCV } : prev.cv,
-        syncStatus: 'connecting',
-      }));
+    // If we have ANY cached data, mark as synced immediately so UI renders
+    const hasCache = !!(cachedProjects || cachedAbout || cachedSettings || cachedCV);
+    setState(prev => ({
+      ...prev,
+      projects: cachedProjects || prev.projects,
+      about: cachedAbout ? { ...defaultAbout, ...cachedAbout } : prev.about,
+      settings: cachedSettings ? { ...defaultSettings, ...cachedSettings, socialLinks: { ...defaultSettings.socialLinks, ...(cachedSettings.socialLinks || {}) } } : prev.settings,
+      cv: cachedCV ? { ...defaultCV, ...cachedCV } : prev.cv,
+      // Show UI instantly if we have cache; otherwise mark synced anyway after 800ms
+      syncStatus: hasCache ? 'synced' : 'connecting',
+    }));
+
+    // Even without cache, never block the UI for more than 800ms
+    if (!hasCache) {
+      const fallback = setTimeout(() => {
+        setState(prev => prev.syncStatus === 'connecting' ? { ...prev, syncStatus: 'synced' } : prev);
+      }, 800);
+      return () => clearTimeout(fallback);
     }
   }, []);
 
-  // === Firebase real-time sync (staggered for speed) ===
+  // === Firebase sync — runs silently in background, never blocks UI ===
   useEffect(() => {
     let initialized = false;
 
@@ -114,12 +122,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       images: Array.isArray(p.images) ? p.images : p.images ? (Object.values(p.images) as string[]) : [],
     });
 
-    // Priority 1: Projects + Settings (needed for first render)
+    // Projects (core data)
     const unsubProjects = listenTo<Record<string, Project>>('projects', data => {
       if (data) {
         const projects = Object.values(data).map(normalizeProject);
         setState(prev => ({ ...prev, projects, syncStatus: 'synced' }));
-        // Cache metadata only (strip heavy base64 images, keep URLs)
+        // Cache lightweight version — strip base64, keep only URLs
         const lightweight = projects.map(p => ({
           ...p,
           images: (p.images || []).filter(img => !img.startsWith('data:')),
@@ -135,6 +143,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       initialized = true;
     });
 
+    // Settings
     const unsubSettings = listenTo<SiteSettings>('settings', data => {
       if (data) {
         const settings = { ...defaultSettings, ...data, socialLinks: { ...defaultSettings.socialLinks, ...(data.socialLinks || {}) } };
@@ -145,7 +154,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    // Priority 2: About + CV (loaded after a tiny delay to unblock first paint)
+    // About + CV — deferred slightly
     let unsubAbout = () => {};
     let unsubCV = () => {};
     const timer1 = setTimeout(() => {
@@ -168,31 +177,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
           writeTo('cv', defaultCV).catch(() => {});
         }
       });
-    }, 100);
-
-    // Priority 3: Messages (only needed for admin, lowest priority)
-    let unsubMessages = () => {};
-    const timer2 = setTimeout(() => {
-      unsubMessages = listenTo<Record<string, ContactMessage>>('messages', data => {
-        if (data) {
-          const messages = Object.values(data).sort(
-            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-          );
-          setState(prev => ({ ...prev, messages }));
-        }
-      });
-    }, 300);
+    }, 50);
 
     return () => {
       unsubProjects();
       unsubSettings();
       unsubAbout();
       unsubCV();
-      unsubMessages();
       clearTimeout(timer1);
-      clearTimeout(timer2);
     };
   }, []);
+
+  // === Messages — ONLY load when admin is authenticated ===
+  useEffect(() => {
+    if (!state.isAuthenticated) return;
+    const unsub = listenTo<Record<string, ContactMessage>>('messages', data => {
+      if (data) {
+        const messages = Object.values(data).sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+        setState(prev => ({ ...prev, messages }));
+      }
+    });
+    return () => unsub();
+  }, [state.isAuthenticated]);
 
   const setViewMode = useCallback((mode: ViewMode) => setState(p => ({ ...p, viewMode: mode })), []);
   const setSearchQuery = useCallback((q: string) => setState(p => ({ ...p, searchQuery: q })), []);
